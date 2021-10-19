@@ -52,9 +52,9 @@ nlohmann::json mergeFileFormatTwo(std::string wholeCGFilename, std::vector<std::
   // }
   attachFormatTwoHeader(wholeCGFinal);
 
-  std::cout << "Now starting merge of " << inputFiles.size() << " files." << std::endl;
+  std::cout << "Now starting merge of " << inputFiles.size() << " files. (v2)" << std::endl;
   for (const auto &filename : inputFiles) {
-    // std::cout << "[Info] Processing " << filename << std::endl;
+     std::cout << "[Info] Processing " << filename << std::endl;
 
     auto current = buildFromJSONv2(functionInfoMap, filename);
 
@@ -156,7 +156,7 @@ nlohmann::json mergeFileFormatOne(std::string wholeCGFilename, std::vector<std::
 
   std::cout << "Now starting merge of " << inputFiles.size() << " files." << std::endl;
   for (const auto &filename : inputFiles) {
-    // std::cout << "[Info] Processing " << filename << std::endl;
+     std::cout << "[Info] Processing " << filename << std::endl;
 
     auto current = buildFromJSON(functionInfoMap, filename);
 

@@ -76,6 +76,21 @@ int main(int argc, const char **argv) {
   clang::tooling::CommonOptionsParser OP(argc, argv, cgc);
   clang::tooling::ClangTool CT(OP.getCompilations(), OP.getSourcePathList());
 
+//  std::cout << "Sources: ";
+//  for (auto src : OP.getSourcePathList()) {
+//    std::cout << src << ", ";
+//  }
+//  std::cout << "\n";
+//
+//  auto cc = OP.getCompilations().getCompileCommands(OP.getSourcePathList().front());
+//  std::cout << "Compile commands:\n";
+//  for (auto c : cc) {
+//    std::cout << c.Filename << ":\n";
+//    for (auto cmd : c.CommandLine) {
+//      std::cout << cmd << "\n";
+//    }
+//  }
+
   nlohmann::json j;
   auto noStmtsCollector = std::make_unique<NumberOfStatementsCollector>();
   auto foCollector = std::make_unique<FilePropertyCollector>();

@@ -96,12 +96,14 @@ int main(int argc, const char **argv) {
   auto foCollector = std::make_unique<FilePropertyCollector>();
   auto csCollector = std::make_unique<CodeStatisticsCollector>();
   auto mcCollector = std::make_unique<MallocVariableCollector>();
+  auto pcCollector = std::make_unique<PointerCallCollector>();
   //auto tyCollector = std::make_unique<UniqueTypeCollector>();
 
   MetaCollectorVector mcs{noStmtsCollector.get()};
   mcs.push_back(foCollector.get());
   mcs.push_back(csCollector.get());
   mcs.push_back(mcCollector.get());
+  mcs.push_back(pcCollector.get());
   //mcs.push_back(tyCollector.get());
 
   CT.run(

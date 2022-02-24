@@ -48,6 +48,48 @@ class MetaCollector {
   std::string getName() { return name; }
 };
 
+
+class PointerCallCollector final : public MetaCollector {
+  std::unique_ptr<MetaInformation> calculateForFunctionDecl(clang::FunctionDecl const *const decl) override {
+
+
+    class PointerCallFinder : public clang::StmtVisitor<PointerCallFinder> {
+      clang::ASTContext &ctx;
+      bool& pointerCall{false};
+    public:
+      PointerCallFinder(clang::ASTContext &ctx, pointerCall) : ctx(ctx), pointerCall(pointerCall) {};
+      ~PointerCallFinder() = default;
+
+      void VisitStmt(clang::Stmt *stmt) {
+        for (auto s : stmt->children()) {
+          if (s) {
+            this->Visit(s);
+          }
+        }
+      }
+
+      void VisitCXXMemberCallExpr(CXXMemberCallExpr *mce) { VisitCallExpr(mce); }
+
+      void VisitCallExpr(CallExpr *CE) {
+        if (!CE->getDirectCallee()) {
+          pointerCall = true;
+        }
+      }
+
+    };
+
+    auto result = std::make_unique<PointerCallResults>();
+    PointerCallFinder pcf(decl->getASTContext(), result->callsFunctionPointer);
+    if (decl->getBody()) {
+      pcf.Visit(decl->getBody());
+    }
+    return result;
+  }
+
+public:
+  PointerCallCollector() : MetaCollector("containsPointerCall") {}
+};
+
 class NumberOfStatementsCollector final : public MetaCollector {
   std::unique_ptr<MetaInformation> calculateForFunctionDecl(clang::FunctionDecl const *const decl) override {
     std::unique_ptr<NumberOfStatementsResult> result = std::make_unique<NumberOfStatementsResult>();
@@ -87,8 +129,9 @@ class FilePropertyCollector : public MetaCollector {
 class CodeStatisticsCollector : public MetaCollector {
   std::unique_ptr<MetaInformation> calculateForFunctionDecl(clang::FunctionDecl const *const decl) override {
     auto result = std::make_unique<CodeStatisticsMetaInformation>();
+
     for (auto declIter = decl->decls_begin(); declIter != decl->decls_end(); ++declIter) {
-      if (const auto varDecl = llvm::dyn_cast<clang::VarDecl>(*declIter)) {
+      if (const auto callEExpr = llvm::dyn_cast<clang::CallExpr>(*declIter)) {
         result->numVars++;
       }
     }

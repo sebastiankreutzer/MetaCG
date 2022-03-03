@@ -103,6 +103,19 @@ class NumberOfStatementsCollector final : public MetaCollector {
   NumberOfStatementsCollector() : MetaCollector("numStatements") {}
 };
 
+class FunctionSpecifierCollector final : public MetaCollector {
+  std::unique_ptr<MetaInformation> calculateForFunctionDecl(clang::FunctionDecl const *const decl) override {
+    std::unique_ptr<SpecifierResult> result = std::make_unique<SpecifierResult>();
+
+    // TODO: isInlined vs. isInlineSpecified
+    result->inlined = decl->isInlined();
+
+    return result;
+  }
+ public:
+  FunctionSpecifierCollector() : MetaCollector("isInlined") {}
+};
+
 class FilePropertyCollector : public MetaCollector {
   std::unique_ptr<MetaInformation> calculateForFunctionDecl(clang::FunctionDecl const *const decl) override {
     auto result = std::make_unique<FilePropertyResult>();

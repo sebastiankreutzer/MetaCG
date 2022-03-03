@@ -28,6 +28,24 @@ struct PointerCallResults final : public MetaInformation {
   }
 };
 
+struct SpecifierResult final : public MetaInformation {
+  bool inlined{false};
+
+  void applyOnJSON(nlohmann::json &json, [[maybe_unused]] const std::string &functionName,
+                   const std::string &metaFieldName, int mcgFormatVersion) override {
+    if (mcgFormatVersion == 1) {
+      json[metaFieldName] = inlined;
+    } else if (mcgFormatVersion == 2) {
+      json["meta"][metaFieldName] = inlined;
+    }
+  }
+
+  bool equals(MetaInformation *other) override {
+    auto nos = static_cast<SpecifierResult *>(other);
+    return inlined == nos->inlined;
+  }
+};
+
 struct NumberOfStatementsResult final : public MetaInformation {
   int numberOfStatements;
   void applyOnJSON(nlohmann::json &json, [[maybe_unused]] const std::string &functionName, const std::string &metaFieldName,

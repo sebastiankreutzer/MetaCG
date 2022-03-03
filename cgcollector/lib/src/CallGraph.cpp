@@ -568,6 +568,7 @@ class CGBuilder : public StmtVisitor<CGBuilder> {
   }
 
   void handleFunctionPointerInArguments(CallExpr *CE) {
+
     // FIXME: Causes issues for some test codes (not terminating).
     return;
     std::string loc;

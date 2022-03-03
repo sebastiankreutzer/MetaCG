@@ -55,9 +55,9 @@ class PointerCallCollector final : public MetaCollector {
 
     class PointerCallFinder : public clang::StmtVisitor<PointerCallFinder> {
       clang::ASTContext &ctx;
-      bool& pointerCall{false};
+      bool& pointerCall;
     public:
-      PointerCallFinder(clang::ASTContext &ctx, pointerCall) : ctx(ctx), pointerCall(pointerCall) {};
+      PointerCallFinder(clang::ASTContext &ctx, bool& pointerCall) : ctx(ctx), pointerCall(pointerCall) {};
       ~PointerCallFinder() = default;
 
       void VisitStmt(clang::Stmt *stmt) {
@@ -68,9 +68,9 @@ class PointerCallCollector final : public MetaCollector {
         }
       }
 
-      void VisitCXXMemberCallExpr(CXXMemberCallExpr *mce) { VisitCallExpr(mce); }
+      void VisitCXXMemberCallExpr(clang::CXXMemberCallExpr *mce) { VisitCallExpr(mce); }
 
-      void VisitCallExpr(CallExpr *CE) {
+      void VisitCallExpr(clang::CallExpr *CE) {
         if (!CE->getDirectCallee()) {
           pointerCall = true;
         }
@@ -131,7 +131,7 @@ class CodeStatisticsCollector : public MetaCollector {
     auto result = std::make_unique<CodeStatisticsMetaInformation>();
 
     for (auto declIter = decl->decls_begin(); declIter != decl->decls_end(); ++declIter) {
-      if (const auto callEExpr = llvm::dyn_cast<clang::CallExpr>(*declIter)) {
+      if (const auto varDecl = llvm::dyn_cast<clang::VarDecl>(*declIter)) {
         result->numVars++;
       }
     }

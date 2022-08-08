@@ -18,6 +18,7 @@
 #define CGCOLLECTOR_CALLGRAPH_H
 
 #include <clang/AST/Decl.h>
+#include <clang/AST/Expr.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/GraphTraits.h>
@@ -56,7 +57,10 @@ class CallGraph : public clang::RecursiveASTVisitor<CallGraph> {
   CallGraph();
   ~CallGraph();
 
-  const std::vector<const clang::Decl *> getInOrderDecls() const {return inOrderDecls;}
+  /// Maps each call expr to the called decl
+  llvm::DenseMap<const clang::CallExpr *, const clang::Decl *> CalledDecls;
+
+  const std::vector<const clang::Decl *> getInOrderDecls() const { return inOrderDecls; }
 
   using UnresolvedMapTy = std::unordered_map<const clang::FunctionDecl *, std::unordered_set<const clang::VarDecl *>>;
 
@@ -123,6 +127,14 @@ class CallGraph : public clang::RecursiveASTVisitor<CallGraph> {
 
   // We are only collecting the declarations, so do not step into the bodies.
   bool TraverseStmt([[maybe_unused]] clang::Stmt *S) { return true; }
+
+  // We should not do anything in uninstantiated template classes, so skip them completely.
+  bool TraverseCXXRecordDecl(clang::CXXRecordDecl *RD) {
+    if (RD->isDependentContext()) {
+      return true;
+    }
+    return RecursiveASTVisitor::TraverseCXXRecordDecl(RD);
+  }
 
   bool shouldWalkTypesOfTypeLocs() const { return false; }
   bool shouldVisitTemplateInstantiations() const { return true; }

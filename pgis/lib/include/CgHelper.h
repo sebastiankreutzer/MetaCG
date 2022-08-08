@@ -1,13 +1,14 @@
 /**
  * File: CgHelper.h
- * License: Part of the MetaCG project. Licensed under BSD 3 clause license. See LICENSE.txt file at
+ * License: Part of the metacg project. Licensed under BSD 3 clause license. See LICENSE.txt file at
  * https://github.com/tudasc/metacg/LICENSE.txt
  */
 
 #ifndef CGNODEHELPER_H_
 #define CGNODEHELPER_H_
 
-#include "CgNode.h"
+#include "../../../graph/include/CgNode.h"
+#include "Callgraph.h"
 
 #include <algorithm>  // std::set_intersection
 #include <memory>
@@ -15,7 +16,9 @@
 
 #include <cassert>
 
+namespace metacg {
 class Callgraph;
+}
 
 // XXX These numbers probably go away.
 namespace CgConfig {
@@ -62,25 +65,10 @@ namespace CgHelper {
 
 bool isConjunction(CgNodePtr node);
 
-int uniquelyInstrumentedConjunctionTest(CgNodePtr conjunctionNode, bool printErrors = true);
-bool isUniquelyInstrumented(CgNodePtr conjunctionNode, CgNodePtr unInstrumented = nullptr, bool printErrors = true);
 CgNodePtrSet getInstrumentationPath(CgNodePtr start);
 
-bool deleteInstrumentationIfRedundant(CgNodePtr node);
-bool allParentsPathsInstrumented(CgNodePtr conjunctionNode);
-
-unsigned long long getInstrumentationOverheadOfConjunction(CgNodePtr conjunctionNode);
-unsigned long long getInstrumentationOverheadOfConjunction(CgNodePtrSet conjunctionNodes);
-unsigned long long getInstrumentationOverheadServingOnlyThisConjunction(CgNodePtr conjunctionNode);
-unsigned long long getInstrumentationOverheadServingOnlyThisConjunction(CgNodePtrSet conjunctionNodes);
-unsigned long long getInstrumentationOverheadOfPath(CgNodePtr node);
-CgNodePtr getInstrumentedNodeOnPath(CgNodePtr node);
-
 // Graph Stats
-CgNodePtrSet getPotentialMarkerPositions(CgNodePtr conjunction);
-bool isValidMarkerPosition(CgNodePtr markerPosition, CgNodePtr conjunction);
 bool isOnCycle(CgNodePtr node);
-CgNodePtrSet getReachableConjunctions(CgNodePtrSet markerPositions);
 
 /**
  * Runs analysis on the call-graph and marks every node which is reachable from main
@@ -97,19 +85,19 @@ CgNodePtrUnorderedSet allNodesToMain(CgNodePtr startNode, CgNodePtr mainNode,
                                      const std::unordered_map<CgNodePtr, CgNodePtrUnorderedSet> &init);
 CgNodePtrUnorderedSet allNodesToMain(CgNodePtr startNode, CgNodePtr mainNode);
 
-bool removeInstrumentationOnPath(CgNodePtr node);
-
-bool isConnectedOnSpantree(CgNodePtr n1, CgNodePtr n2);
-bool canReachSameConjunction(CgNodePtr n1, CgNodePtr n2);
+// bool removeInstrumentationOnPath(CgNodePtr node);
+//
+// bool isConnectedOnSpantree(CgNodePtr n1, CgNodePtr n2);
+// bool canReachSameConjunction(CgNodePtr n1, CgNodePtr n2);
 
 CgNodePtrSet getDescendants(CgNodePtr child);
 CgNodePtrSet getAncestors(CgNodePtr child);
+//
+// void markReachablePar(CgNodePtr start, CgNodePtrUnorderedSet &seen);
+//
+// void markReachableParStart(CgNodePtr start);
 
-void markReachablePar(CgNodePtr start, CgNodePtrUnorderedSet &seen);
-
-void markReachableParStart(CgNodePtr start);
-
-double calcRuntimeThreshold(const Callgraph &cg, bool useLongAsRef);
+double calcRuntimeThreshold(const metacg::Callgraph &cg, bool useLongAsRef);
 
 inline CgNodePtrSet setIntersect(const CgNodePtrSet &a, const CgNodePtrSet &b) {
   CgNodePtrSet intersect;
@@ -134,4 +122,19 @@ inline bool isSubsetOf(const CgNodePtrSet &smallSet, const CgNodePtrSet &largeSe
 inline bool intersects(const CgNodePtrSet &a, const CgNodePtrSet &b) { return !setIntersect(a, b).empty(); }
 }  // namespace CgHelper
 
+
+
+namespace pgis {
+
+using Callgraph = metacg::Callgraph;
+
+template <typename MD, typename... Args>
+void attachMetaDataToGraph(Callgraph *cg, const Args &... args) {
+  for (auto n : *cg) {
+    if (!getOrCreateMD<MD>(n, args...)) {
+      assert(false && MD::key() != "" && "Could not create MetaData with key");
+    }
+  }
+}
+} // namespace pgis
 #endif

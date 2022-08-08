@@ -19,7 +19,7 @@ static llvm::cl::opt<bool> captureCtorsDtors("capture-ctors-dtors",
                                              llvm::cl::desc("Capture calls to Constructors and Destructors"),
                                              llvm::cl::cat(cgc));
 static llvm::cl::opt<int> metacgFormatVersion("metacg-format-version",
-                                              llvm::cl::desc("MetaCG file version to output, values={1,2}, default=1"),
+                                              llvm::cl::desc("metacg file version to output, values={1,2}, default=1"),
                                               llvm::cl::cat(cgc));
 
 typedef std::vector<MetaCollector *> MetaCollectorVector;
@@ -70,43 +70,47 @@ int main(int argc, const char **argv) {
   }
   metacgFormatVersion.setInitialValue(1);  // Have the old file format as default
 
-  std::cout << "Running MetaCG::CGCollector (version " << CGCollector_VERSION_MAJOR << '.' << CGCollector_VERSION_MINOR
-            << ")\nGit revision: " << MetaCG_GIT_SHA << std::endl;
+  std::cout << "Running metacg::CGCollector (version " << CGCollector_VERSION_MAJOR << '.' << CGCollector_VERSION_MINOR
+            << ")\nGit revision: " << MetaCG_GIT_SHA << " LLVM/Clang version: " << LLVM_VERSION_STRING << std::endl;
 
+#if (LLVM_VERSION_MAJOR >= 10) && (LLVM_VERSION_MAJOR <= 12)
   clang::tooling::CommonOptionsParser OP(argc, argv, cgc);
+#else
+  auto ParseResult = clang::tooling::CommonOptionsParser::create(argc, argv, cgc);
+  if (!ParseResult) {
+    std::cerr << toString(ParseResult.takeError()) << "\n";
+    return -1;
+  }
+  clang::tooling::CommonOptionsParser &OP = ParseResult.get();
+#endif
   clang::tooling::ClangTool CT(OP.getCompilations(), OP.getSourcePathList());
-
-//  std::cout << "Sources: ";
-//  for (auto src : OP.getSourcePathList()) {
-//    std::cout << src << ", ";
-//  }
-//  std::cout << "\n";
-//
-//  auto cc = OP.getCompilations().getCompileCommands(OP.getSourcePathList().front());
-//  std::cout << "Compile commands:\n";
-//  for (auto c : cc) {
-//    std::cout << c.Filename << ":\n";
-//    for (auto cmd : c.CommandLine) {
-//      std::cout << cmd << "\n";
-//    }
-//  }
 
   nlohmann::json j;
   auto noStmtsCollector = std::make_unique<NumberOfStatementsCollector>();
   auto foCollector = std::make_unique<FilePropertyCollector>();
   auto csCollector = std::make_unique<CodeStatisticsCollector>();
   auto mcCollector = std::make_unique<MallocVariableCollector>();
+  // auto tyCollector = std::make_unique<UniqueTypeCollector>();
+  auto noConditionalBranchesCollector = std::make_unique<NumConditionalBranchCollector>();
+  auto noOperationsCollector = std::make_unique<NumOperationsCollector>();
+  auto loopDepthCollector = std::make_unique<LoopDepthCollector>();
+  auto globalLoopDepthCollector = std::make_unique<GlobalLoopDepthCollector>();
   auto pcCollector = std::make_unique<PointerCallCollector>();
   auto inCollector = std::make_unique<FunctionSpecifierCollector>();
-  //auto tyCollector = std::make_unique<UniqueTypeCollector>();
 
   MetaCollectorVector mcs{noStmtsCollector.get()};
   mcs.push_back(foCollector.get());
   mcs.push_back(csCollector.get());
   mcs.push_back(mcCollector.get());
-  mcs.push_back(pcCollector.get());
-  mcs.push_back(inCollector.get());
-  //mcs.push_back(tyCollector.get());
+  // mcs.push_back(tyCollector.get());
+  if (metacgFormatVersion > 1) {
+    mcs.push_back(noConditionalBranchesCollector.get());
+    mcs.push_back(noOperationsCollector.get());
+    mcs.push_back(loopDepthCollector.get());
+    mcs.push_back(globalLoopDepthCollector.get());
+    mcs.push_back(pcCollector.get());
+    mcs.push_back(inCollector.get());
+  }
 
   CT.run(
       clang::tooling::newFrontendActionFactory<CallGraphCollectorFactory>(new CallGraphCollectorFactory(mcs, j)).get());
@@ -115,8 +119,12 @@ int main(int argc, const char **argv) {
     addMetaInformationToJSON(j, mc->getName(), mc->getMetaInformation(), metacgFormatVersion);
   }
 
+  for (const auto mc : mcs) {
+    mc->addMetaInformationToCompleteJson(j, metacgFormatVersion);
+  }
+
   std::string filename(*OP.getSourcePathList().begin());
-  filename = filename.substr(0, filename.find_last_of(".")) + ".ipcg";
+  filename = filename.substr(0, filename.find_last_of('.')) + ".ipcg";
 
   std::ofstream file(filename);
   file << j << std::endl;

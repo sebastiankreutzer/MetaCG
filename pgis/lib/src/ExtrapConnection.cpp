@@ -15,13 +15,14 @@
 #pragma GCC diagnostic ignored "-Wpedantic"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wsign-compare"
+#include "CallgraphManager.h"
 #include "EXTRAP_SingleParameterModelGenerator.hpp"
 #include <EXTRAP_MultiParameterSimpleModelGenerator.hpp>
 #include <EXTRAP_SingleParameterSimpleModelGenerator.hpp>
+#include <config/PiraIIConfig.h>
 #pragma GCC diagnostic pop
 
 namespace extrapconnection {
-
 void printConfig(ExtrapConfig &cfg) {
   auto console = spdlog::get("console");
 
@@ -38,7 +39,6 @@ void printConfig(ExtrapConfig &cfg) {
       "---- Extra-P Config ----\nBaseDir: {}\nRepetitions: {}\nPrefix: {}\nPostfix: {}\nIterations: {}\nParams: "
       "{}\n---- End Extra-P Config ----",
       cfg.directory, cfg.repetitions, cfg.prefix, cfg.postfix, cfg.iteration, parameterStr);
-
 }
 
 ExtrapConfig getExtrapConfigFromJSON(std::string filePath) {
@@ -77,7 +77,6 @@ ExtrapConfig getExtrapConfigFromJSON(std::string filePath) {
     }
     if (key == "params") {
       auto subTree = it.value();
-      // TODO double check if this is the correct sub-tree
       for (json::iterator st_it = subTree.begin(); st_it != subTree.end(); ++st_it) {
         // This case should only be hit, when actually a PARAMETER!
         std::string paramName = '.' + st_it.key();
@@ -120,7 +119,7 @@ std::vector<EXTRAP::Parameter> ExtrapModelProvider::getParameterList() {
   std::vector<EXTRAP::Parameter> params;
   params.reserve(config.params.size());
 
-  for (const auto p : getKeys(config.params)) {
+  for (const auto &p : getKeys(config.params)) {
     params.emplace_back(EXTRAP::Parameter(p));
   }
 
@@ -141,7 +140,7 @@ void ExtrapModelProvider::buildModels() {
   // Actual parameter values: Inner vector is values for the parameter, outer vector corresponds to paramPrefixes
   std::vector<std::vector<int>> paramValues;
 
-  for (const auto pv : config.params) {
+  for (const auto &pv : config.params) {
     paramValues.push_back(pv.second);
   }
 
@@ -151,7 +150,7 @@ void ExtrapModelProvider::buildModels() {
   reader.prepareCubeFileReader(scalingType, finalDir, config.prefix, config.postfix, cubeFileName, extrapParams,
                                paramPrefixes, paramValues, config.repetitions);
 
-  int dimensions = extrapParams.size();
+  int dimensions = extrapParams.size(); // The Extra-P API awaits int instead of size_t
   auto console = spdlog::get("console");
   auto cubeFiles = reader.getFileNames(dimensions);
   auto fns = reader.getFileNames(dimensions);
@@ -169,7 +168,7 @@ void ExtrapModelProvider::buildModels() {
       }
     }
     std::string dbgOut("Reading cube files:\n");
-    for (const auto f : cubeFiles) {
+    for (const auto &f : cubeFiles) {
       dbgOut += "- " + f + "\n";
     }
     console->debug(dbgOut);
@@ -178,7 +177,7 @@ void ExtrapModelProvider::buildModels() {
   printDbgInfos();
 
   for (size_t i = 0; i < fns.size(); ++i) {
-    //    if (i % config.repetitions == 0) {
+    //    if (i % configPtr.repetitions == 0) {
     const auto attEpData = [&](auto &cube, auto cnode, auto n) {
       console->debug("Attaching Cube info from file {}", fns.at(i));
       auto ptd = getOrCreateMD<pira::PiraTwoData>(n, ExtrapConnector({}, {}));
@@ -186,11 +185,12 @@ void ExtrapModelProvider::buildModels() {
       ptd->addToRuntimeVec(CubeCallgraphBuilder::impl::time(cube, cnode));
     };
 
-    CubeCallgraphBuilder::impl::build(std::string(fns.at(i)), attEpData);
+    auto &mcgManager = metacg::graph::MCGManager::get();
+    CubeCallgraphBuilder::impl::build(std::string(fns.at(i)), mcgManager, attEpData);
     //   }
   }
 
-  for (const auto n : CallgraphManager::get()) {
+  for (const auto &n : metacg::pgis::PiraMCGProcessor::get()) {
     console->trace("No PiraTwoData meta data");
     if (n->has<pira::PiraTwoData>()) {
       auto ptd = CubeCallgraphBuilder::impl::get<pira::PiraTwoData>(n);
@@ -224,11 +224,8 @@ void ExtrapModelProvider::buildModels() {
    * Notes
    * - We can have multiple models for one function, as Extra-P models based on the call-path profiles.
    * - We have models for each metric captured in the target application.
-   * - We need the call paths to retrieve the model we want, i.e., need to construct the call path.
    */
-
-  // FIXME: Delete object / prevent resource leakage
-  EXTRAP::ModelGenerator *mg = nullptr;
+  EXTRAP::ModelGenerator *mg = nullptr; // deleted in class destructor
   if (extrapParams.size() == 1) {
     auto smg = new EXTRAP::SingleParameterSimpleModelGenerator();
     smg->setEpsilon(0.05);
@@ -238,10 +235,6 @@ void ExtrapModelProvider::buildModels() {
   } else {
     auto mmg = new EXTRAP::MultiParameterSimpleModelGenerator();
     mg = mmg;
-  }
-
-  if (!mg) {
-    spdlog::get("errconsole")->error("Creation of Model Generator failed.");
   }
 
   experiment->addModelGenerator(mg);
@@ -260,16 +253,13 @@ void ExtrapModelProvider::buildModels() {
         continue;
       }
       console->debug("Processing for {}", cp->getRegion()->getName());
-      // Currently only one model is generated at a time. // How to handle multiple?
       auto functionModels = experiment->getModels(*m, *cp);
 
       for (auto i : functionModels) {
-        if (!i) {
+        if (i == nullptr) {
           spdlog::get("errconsole")->warn("Function model is NULL");
-          auto tf = i->getModelFunction();
-          if (!tf) {
-            spdlog::get("errconsole")->warn("Function model is NULL");
-          }
+          assert(false && "the function model should not be nullptr");
+          // What happened if it is indeed nullptr?
         }
         console->debug("{} >>>> {}", cp->getRegion()->getName(), i->getModelFunction()->getAsString(extrapParams));
       }
@@ -281,4 +271,15 @@ void ExtrapModelProvider::buildModels() {
   console->info("Finished model creation.");
 }
 
+void ExtrapConnector::modelAggregation(pgis::config::ModelAggregationStrategy modelAggregationStrategy) {
+  if (modelAggregationStrategy == pgis::config::ModelAggregationStrategy::Sum) {
+    epModelFunction = std::make_unique<SumFunction>(models);
+  } else if (modelAggregationStrategy == pgis::config::ModelAggregationStrategy::FirstModel) {
+    epModelFunction = std::make_unique<FirstModelFunction>(models);
+  } else if (modelAggregationStrategy == pgis::config::ModelAggregationStrategy::Average) {
+    epModelFunction = std::make_unique<AvgFunction>(models);
+  } else if (modelAggregationStrategy == pgis::config::ModelAggregationStrategy::Maximum) {
+    epModelFunction = std::make_unique<MaxFunction>(models);
+  }
+}
 }  // namespace extrapconnection

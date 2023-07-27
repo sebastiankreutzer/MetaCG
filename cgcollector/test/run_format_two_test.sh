@@ -86,6 +86,15 @@ for tc in ${testGlob}; do
 done
 echo "Single file test failures: $fails"
 
+testGlob="./input/metaCollectors/virtualCalls/*.cpp"
+for tc in ${testGlob}; do
+  echo "Running test ${tc}"
+  applyFileFormatTwoToSingleTU ${tc}
+  fail=$?
+  fails=$((fails + fail))
+done
+echo "Single file test failures: $fails"
+
 # Single File and full Ctor/Dtor coverage
 echo -e "\n --- Running single file virtualCalls tests ---"
 testGlob="./input/virtualCalls/*.cpp"

@@ -97,6 +97,7 @@ int main(int argc, const char **argv) {
   auto globalLoopDepthCollector = std::make_unique<GlobalLoopDepthCollector>();
   auto pcCollector = std::make_unique<PointerCallCollector>();
   auto inCollector = std::make_unique<FunctionSpecifierCollector>();
+  auto vCallCollector = std::make_unique<VirtualCallCollector>();
 
   MetaCollectorVector mcs{noStmtsCollector.get()};
   mcs.push_back(foCollector.get());
@@ -110,6 +111,7 @@ int main(int argc, const char **argv) {
     mcs.push_back(globalLoopDepthCollector.get());
     mcs.push_back(pcCollector.get());
     mcs.push_back(inCollector.get());
+    mcs.push_back(vCallCollector.get());
   }
 
   CT.run(

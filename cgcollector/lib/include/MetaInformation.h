@@ -5,6 +5,7 @@
 
 #include <clang/AST/Expr.h>
 #include <iostream>
+#include <set>
 #include <llvm/ADT/DenseMap.h>
 
 struct MetaInformation {
@@ -213,4 +214,21 @@ struct GlobalLoopDepthResult final : public MetaInformation {
     return o->calledFunctions == calledFunctions;
   }
 };
+
+struct VirtualCallsResult final : public MetaInformation {
+  std::set<std::string> virtualCalls;
+
+  void applyOnJSON(nlohmann::json &json, [[maybe_unused]] const std::string &functionName,
+                   const std::string &metaFieldName, int mcgFormatVersion) override {
+    if (mcgFormatVersion > 1) {
+      json["meta"][metaFieldName] = virtualCalls;
+    }
+  }
+  bool equals(MetaInformation *mi) override {
+    const auto o = static_cast<VirtualCallsResult *>(mi);
+    return o->virtualCalls == virtualCalls;
+  }
+
+};
+
 #endif /* ifndef CGCOLLECTOR_METAINFORMATION_H */

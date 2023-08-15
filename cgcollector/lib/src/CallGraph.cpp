@@ -874,7 +874,7 @@ class CGBuilder : public StmtVisitor<CGBuilder> {
       std::stringstream ss;
       // If we can determine the call target, we can check for unresolved symbols for that function.
       if (auto func = dyn_cast<FunctionDecl>(D)) {
-        ss << "Unresolved before the loop: " << unresolvedSymbols.size() << "\n";
+        //ss << "Unresolved before the loop: " << unresolvedSymbols.size() << "\n";
         const int maxUnresolveSteps = 32000;  // XXX: Yes, magic number.
         int numAttempts = 0;
         if (unresolvedSymbols.find(func) != unresolvedSymbols.end()) {
@@ -888,11 +888,11 @@ class CGBuilder : public StmtVisitor<CGBuilder> {
             while (!worklist.empty()) {
               //              std::cout << "worklist size " << worklist.size() << std::endl;
               if (numAttempts > maxUnresolveSteps) {
-                ss << "Remaining in worklist: \n";
-                for (const auto sym : worklist) {
-                  ss << sym->getNameAsString() << "\n";
-                }
-                std::cout << ss.str() << std::endl;
+//                ss << "Remaining in worklist: \n";
+//                for (const auto sym : worklist) {
+//                  ss << sym->getNameAsString() << "\n";
+//                }
+                //std::cout << ss.str() << std::endl;
                 break;
               }
               const auto curSym = worklist.front();
@@ -910,9 +910,9 @@ class CGBuilder : public StmtVisitor<CGBuilder> {
             }
           }
           unresolvedSymbols.erase(unresolvedSymbols.find(func));
-          ss << "Unresolved symbols after loop: " << unresolvedSymbols.size() << "\n";
+          //ss << "Unresolved symbols after loop: " << unresolvedSymbols.size() << "\n";
         }
-        std::cout << ss.str() << std::endl;
+//        std::cout << ss.str() << std::endl;
       }
     }
     if (auto ice = CE->getCallee()) {

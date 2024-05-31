@@ -238,4 +238,20 @@ struct EstimateCallCountResult final : public MetaInformation {
   }
 };
 
+struct VirtualCallsResult final : public MetaInformation {
+  std::set<std::string> virtualCalls;
+
+  void applyOnJSON(nlohmann::json &json, [[maybe_unused]] const std::string &functionName,
+                   const std::string &metaFieldName, int mcgFormatVersion) override {
+    if (mcgFormatVersion > 1) {
+      json["meta"][metaFieldName] = virtualCalls;
+    }
+  }
+  bool equals(MetaInformation *mi) override {
+    const auto o = static_cast<VirtualCallsResult *>(mi);
+    return o->virtualCalls == virtualCalls;
+  }
+
+};
+
 #endif /* ifndef CGCOLLECTOR_METAINFORMATION_H */

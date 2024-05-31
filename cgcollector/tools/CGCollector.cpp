@@ -141,6 +141,7 @@ int main(int argc, const char **argv) {
   auto inlineCollector = std::make_unique<InlineCollector>();
   auto estimateCallCountCollector = std::make_unique<EstimateCallCountCollector>(
       loopCountEstimation, conditionTrueChance, 1.0 - conditionTrueChance, exceptionChance);
+  auto vCallCollector = std::make_unique<VirtualCallCollector>();
 
   MetaCollectorVector mcs{noStmtsCollector.get()};
   mcs.push_back(foCollector.get());
@@ -154,6 +155,7 @@ int main(int argc, const char **argv) {
     mcs.push_back(globalLoopDepthCollector.get());
     mcs.push_back(inlineCollector.get());
     mcs.push_back(estimateCallCountCollector.get());
+    mcs.push_back(vCallCollector.get());
   }
 
   CT.run(

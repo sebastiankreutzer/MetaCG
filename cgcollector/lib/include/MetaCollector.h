@@ -506,4 +506,111 @@ class EstimateCallCountCollector final : public MetaCollector {
   }
 };
 
+class VirtualCallCollector final: public MetaCollector {
+ public:
+  VirtualCallCollector() : MetaCollector("virtualCalls") {}
+
+ private:
+  std::unique_ptr<MetaInformation> calculateForFunctionDecl(
+      const clang::FunctionDecl *const decl,
+      const llvm::DenseMap<const clang::CallExpr *, const clang::Decl *>& calledDecls) override {
+    assert(decl);
+    auto result = std::make_unique<VirtualCallsResult>();
+    std::set<std::string> vCalls;
+
+
+    class VirtualCallFinder : public clang::StmtVisitor<VirtualCallFinder> {
+      clang::ASTContext &ctx;
+      std::set<std::string>& vCalls;
+     public:
+      VirtualCallFinder(clang::ASTContext &ctx, std::set<std::string>& vCalls) : ctx(ctx), vCalls(vCalls) {};
+      ~VirtualCallFinder() = default;
+
+      void visitChildren(clang::Stmt* stmt) {
+        for (auto s : stmt->children()) {
+          if (s) {
+            this->Visit(s);
+          }
+        }
+      }
+
+      void VisitStmt(clang::Stmt *stmt) {
+        visitChildren(stmt);
+      }
+
+
+      void VisitCXXOperatorCallExpr(clang::CXXOperatorCallExpr* oce) {
+        // TODO: This does not find direct operator calls correctly
+        const auto* calleeExpr = llvm::dyn_cast<clang::MemberExpr>(oce->getCallee());
+        if (calleeExpr && calleeExpr->hasQualifier()) {
+          return;
+        }
+        auto* calleeDecl = llvm::dyn_cast<clang::NamedDecl>(oce->getCalleeDecl());
+        if (calleeDecl) {
+
+          const auto fnames = getMangledName(calleeDecl);
+          for (const auto& fname : fnames) {
+            vCalls.insert(fname);
+          }
+        }
+        visitChildren(oce);
+      }
+
+      void VisitCallExpr(clang::CallExpr *ce) {
+        assert(ce);
+        auto memberCE = llvm::dyn_cast<clang::CXXMemberCallExpr>(ce);
+        if (memberCE && memberCE->getMethodDecl() && memberCE->getMethodDecl()->isVirtual()) {
+          if (memberCE->getCallee()) {
+            const auto *calleeExpr = llvm::dyn_cast<clang::MemberExpr>(memberCE->getCallee());
+            if (calleeExpr && !calleeExpr->hasQualifier()) {
+              // We have a virtual call
+              auto fdecl = llvm::dyn_cast<clang::FunctionDecl>(memberCE->getMethodDecl());
+              //              if (!fdecl) {
+              //                std::cout << "Not a function decl: " << calleeExpr->getReferencedDeclOfCallee() << "\n";
+              //                return;
+              //              }
+              if (fdecl) {
+                const auto fnames = getMangledName(fdecl);
+                for (const auto &fname : fnames) {
+                  vCalls.insert(fname);
+                }
+              }
+            }
+          }
+        }
+        visitChildren(ce);
+      }
+
+
+    };
+
+    VirtualCallFinder vcf(decl->getASTContext(), vCalls);
+    if (decl->getBody()) {
+      vcf.Visit(decl->getBody());
+    }
+
+
+    //    for (const auto& [ce, calleeDecl] : calledDecls) {
+    //      const auto* memberCE = llvm::dyn_cast<clang::CXXMemberCallExpr>(ce);
+    //      if (memberCE && memberCE->getMethodDecl()->isVirtual()) {
+    //        const auto* calleeExpr = llvm::dyn_cast<clang::MemberExpr>(memberCE->getCallee());
+    //        if (calleeExpr && !calleeExpr->hasQualifier()) {
+    //          // We have a virtual call
+    //          auto fdecl = llvm::dyn_cast<clang::FunctionDecl>(calleeDecl);
+    //          if(!fdecl) {
+    //            std::cout << "Not a function decl: " << calleeDecl->getDeclKindName() << "\n";
+    //            continue;
+    //          }
+    //          const auto fnames = getMangledName(fdecl);
+    //          for (const auto& fname : fnames) {
+    //            vCalls.insert(fname);
+    //          }
+    //        }
+    //      }
+    //    }
+    result->virtualCalls = std::move(vCalls);
+    return result;
+  }
+};
+
 #endif /* ifndef CGCOLLECTOR_METACOLLECTOR_H */

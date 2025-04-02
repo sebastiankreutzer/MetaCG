@@ -14,7 +14,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: cmake
-      run: cmake -B build -S .
+      run: -DCMAKE_POLICY_VERSION_MINIMUM=3.5 cmake -B build -S .
     - name: build
       run: cmake --build build --parallel
     - name: install

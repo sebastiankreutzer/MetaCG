@@ -5,6 +5,5 @@ add_subdirectory(cgformat)
 add_subdirectory(cgdiff)
 
 if(BUILD_CAGE)
-    add_subdirectory(cage)
+  add_subdirectory(cage)
 endif()
-

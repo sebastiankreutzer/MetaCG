@@ -10,3 +10,8 @@ endif()
 
 target_link_libraries(cage PUBLIC metacg::metacg)
 add_config_include(cage)
+
+# TODO: For prototyping, think about where to put MD eventually
+add_library(cage_metadata SHARED CageMD.cpp)
+target_include_directories(cage_metadata PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/tools/cage/include>)
+add_metacg(cage_metadata)

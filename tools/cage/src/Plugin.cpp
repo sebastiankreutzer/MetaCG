@@ -11,6 +11,7 @@
 
 #include "cage/generator/CallgraphGenerator.h"
 #include "cage/generator/FileExporter.h"
+#include "cage/generator/CallGraphEmbedder.h"
 
 using namespace llvm;
 
@@ -29,6 +30,8 @@ static opt<cage::PTAType> pta(
     cat(cageOpts), init(cage::PTAType::No));
 
 static opt<std::string> cgout("cg-file", desc("Output file for the generated call graph"), cat(cageOpts), init(""));
+
+static opt<bool> embed("embed", desc("Embed output graph into binary"), cat(cageOpts), init(true));
 
 namespace cage {
 PreservedAnalyses CaGe::run(Module& M, ModuleAnalysisManager& MA) {
@@ -51,6 +54,9 @@ PreservedAnalyses CaGe::run(Module& M, ModuleAnalysisManager& MA) {
 
   Generator gen(pta);
   gen.addConsumer(std::make_unique<FileExporter>(cgout));
+  if (embed) {
+    gen.addConsumer(std::make_unique<GraphEmbedder>(M));
+  }
 
   if (!gen.run(M, &MA))
     return PreservedAnalyses::all();

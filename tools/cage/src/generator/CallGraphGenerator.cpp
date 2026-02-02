@@ -62,9 +62,29 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
     if (I.getCalledFunction() != nullptr && I.getCalledFunction()->isIntrinsic())
       return;
     auto* currentFunction = I.getParent()->getParent();
-    auto& currentNode = mcg->getSingleNode(currentFunction->getName().str());
+    auto sourceName = currentFunction->getName();
+    if (sourceName.empty()) {
+      llvm::errs() << "Function has no name!\n";
+      return;
+    }
+    auto& matchingNodes = mcg->getNodes(sourceName.str());
+    metacg::CgNode* currentNode;
+    if (matchingNodes.empty()) {
+      llvm::errs() << "Could not find node for function " << currentFunction->getName() << " - inserting now\n";
+      currentNode = &getOrInsertNode(currentFunction);
+    } else {
+      if (matchingNodes.size() > 1) {
+        llvm::errs() << "Encountered duplicate nodes for function " << sourceName << "\n";
+      }
+      currentNode = mcg->getNode(matchingNodes[0]);
+      if (!currentNode) {
+        llvm::errs() << "Could not retrieve node with ID=" << matchingNodes[0] << "\n";
+        return;
+      }
+    }
+
     if (metaDataAvail) {
-      size_t numAddedCalls = addVirtualCalltargets(I, currentNode);
+      size_t numAddedCalls = addVirtualCalltargets(I, *currentNode);
       // This function pointer was a virtual call base, so we do not need to run the overapproximation
       if (numAddedCalls != 0)
         return;
@@ -77,7 +97,7 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
         for (const auto& func : possibleFuncs) {
           assert(func);
           auto& childNode = getOrInsertNode(func);
-          mcg->addEdge(currentNode, childNode);
+          mcg->addEdge(*currentNode, childNode);
         }
       }
     }

@@ -57,10 +57,11 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
     }
   }
 
-  ~CallBaseVisitor() {}
+  ~CallBaseVisitor() = default;
 
   void visitCallBase(llvm::CallBase& I) {
-    if (I.getCalledFunction() != nullptr && I.getCalledFunction()->isIntrinsic())
+    // only pass non-resolved calls to metavirt
+    if (I.getCalledFunction() != nullptr)
       return;
     auto* currentFunction = I.getParent()->getParent();
     auto sourceName = currentFunction->getName();
@@ -85,23 +86,20 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
     }
 
     if (metaDataAvail) {
-      size_t numAddedCalls = addVirtualCalltargets(I, *currentNode);
+      size_t numAddedCalls = addVirtualCallTargets(I, *currentNode);
       // This function pointer was a virtual call base, so we do not need to run the overapproximation
       if (numAddedCalls != 0)
         return;
     }
 
-    if (I.getCalledFunction() == nullptr) {
-      // Was function pointer, where we can not get the called function
-      if (pta == PTAType::BySignature) {
-        const auto& possibleFuncs = signatureFunctionMap[I.getFunctionType()];
-        for (const auto& func : possibleFuncs) {
-          assert(func);
-          auto& childNode = getOrInsertNode(func);
-          if (!mcg->existsEdge(*currentNode, childNode)) {
-            mcg->addEdge(*currentNode, childNode);
-          }
-        }
+    // metavirt turned up with nothing
+    // --> was function pointer, where we can not get the called function
+    if (pta == PTAType::BySignature) {
+      const auto& possibleFuncs = signatureFunctionMap[I.getFunctionType()];
+      for (const auto& func : possibleFuncs) {
+        assert(func);
+        auto& childNode = getOrInsertNode(func);
+        insertEdge(*currentNode, childNode);
       }
     }
   }
@@ -109,7 +107,6 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
   void visitFunction(llvm::Function& F) {
     if (F.isIntrinsic())
       return;
-//    llvm::outs() << "Processing function " << F.getName() << "\n";
 
     auto& currentNode = getOrInsertNode(&F);
 
@@ -124,16 +121,14 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       const Function* childFunc = elem->getFunction();
       assert(childFunc->hasName());
       metacg::CgNode& childNode = getOrInsertNode(childFunc);
-      if (!mcg->existsEdge(currentNode, childNode)) {
-        mcg->addEdge(currentNode, childNode);
-      }
+      insertEdge(currentNode, childNode);
     }
   }
 
   std::unique_ptr<metacg::Callgraph> takeResult() { return std::move(mcg); }
 
  private:
-  size_t addVirtualCalltargets(CallBase& I, const metacg::CgNode& currentNode) const {
+  size_t addVirtualCallTargets(CallBase& I, const metacg::CgNode& currentNode) {
     // TODO: Improve this design if we want to support multiple virtual call resolution mechanisms, e.g. with
     //       template policy parameter.
 #ifdef HAVE_METAVIRT
@@ -143,12 +138,9 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
     if (vcallData.value().call_targets.empty())
       return 0;
 
-    outs() << metavirt::fn_names_and_origins(vcallData.value()).size() << "\n";
     for (const auto& dataPoints : metavirt::fn_names_and_origins(vcallData.value())) {
       auto& childNode = mcg->getOrInsertNode(dataPoints.name.str(), dataPoints.origin.str());
-      if (!mcg->existsEdge(currentNode, childNode)) {
-        mcg->addEdge(currentNode, childNode);
-      }
+      insertEdge(currentNode, childNode);
       assert(childNode.getOrigin() == dataPoints.origin);
     }
     return metavirt::fn_names_and_origins(vcallData.value()).size();
@@ -169,6 +161,14 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       origin = std::filesystem::path(functionInfoMap[F]->getDirectory().str()) / functionInfoMap[F]->getFilename().str();
     }
     return mcg->getOrInsertNode(nameToUse.str(), std::move(origin), false, hasBody);
+  }
+
+  bool insertEdge(const metacg::CgNode& a, const metacg::CgNode& b) {
+    if (mcg->existsEdge(a, b)) {
+      return false;
+    }
+    mcg->addEdge(a, b);
+    return true;
   }
 
   std::unique_ptr<metacg::Callgraph> mcg;

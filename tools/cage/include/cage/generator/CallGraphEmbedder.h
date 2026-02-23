@@ -18,7 +18,7 @@ namespace cage {
 
 class GraphEmbedder : public CallGraphConsumer {
  public:
-  explicit GraphEmbedder(llvm::Module& M) : GraphEmbedder(M, ".metacg") {}
+  explicit GraphEmbedder(llvm::Module& M) : GraphEmbedder(M, "metacg") {}
   GraphEmbedder(llvm::Module& M, const std::string& sectionName) : M(M), sectionName(sectionName) {}
   void consumeCallGraph(metacg::Callgraph&) override;
 

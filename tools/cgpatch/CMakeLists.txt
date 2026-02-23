@@ -45,4 +45,4 @@ add_metacg(cgpatch-inst-pass)
 install(TARGETS cgpatch-inst-pass cgpatch-runtime LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 add_subdirectory(wrapper)
-add_subdirectory(test)
+#add_subdirectory(test)

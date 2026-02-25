@@ -51,7 +51,7 @@ void instrumentIndirectCalls(Module& M) {
 
   for (Function& F : M) {
     if (verbose) {
-      outs() << "Traversing function: " << F.getName() << "\n";
+//      outs() << "Traversing function: " << F.getName() << "\n";
     }
     for (BasicBlock& B : F)
       for (Instruction& Ins : B) {
@@ -60,7 +60,7 @@ void instrumentIndirectCalls(Module& M) {
         auto CT = detectCallType(CB);
 
         if (verbose) {  // Only print if verbose is true
-          printCallTypeInfo(CT, CB);
+//          printCallTypeInfo(CT, CB);
         }
         if (CT == CallType::Unknown)
           continue;
@@ -115,10 +115,19 @@ struct CGPatchInst : PassInfoMixin<CGPatchInst> {
 
 // Registration of the new pass
 llvm::PassPluginLibraryInfo getCGPatchInstPluginInfo() {
-  return {LLVM_PLUGIN_API_VERSION, "cgpatch-inst", LLVM_VERSION_STRING, [](PassBuilder& PB) {
-            PB.registerPipelineStartEPCallback(
-                [](ModulePassManager& MPM, OptimizationLevel l) { MPM.addPass(CGPatchInst()); });
-          }};
+  return {
+    LLVM_PLUGIN_API_VERSION, "cgpatch-inst", LLVM_VERSION_STRING, [](PassBuilder& PB) {
+      //            PB.registerPipelineStartEPCallback(
+      //                [](ModulePassManager& MPM, OptimizationLevel l) { MPM.addPass(CGPatchInst()); });
+      //          }};
+      // Note: Needed to run early before because we were patching source CGs. Now we can run late.
+
+      PB.registerFullLinkTimeOptimizationLastEPCallback([](ModulePassManager& PM, OptimizationLevel o) {
+        outs() << "Registering CGPatch to run during full LTO\n";
+        PM.addPass(CGPatchInst());
+      });
+    }
+  };
 }
 
 extern "C" LLVM_ATTRIBUTE_WEAK::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() {

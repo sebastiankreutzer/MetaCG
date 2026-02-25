@@ -97,7 +97,9 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
         for (const auto& func : possibleFuncs) {
           assert(func);
           auto& childNode = getOrInsertNode(func);
-          mcg->addEdge(*currentNode, childNode);
+          if (!mcg->existsEdge(*currentNode, childNode)) {
+            mcg->addEdge(*currentNode, childNode);
+          }
         }
       }
     }
@@ -121,7 +123,9 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       const Function* childFunc = elem->getFunction();
       assert(childFunc->hasName());
       metacg::CgNode& childNode = getOrInsertNode(childFunc);
-      mcg->addEdge(currentNode, childNode);
+      if (!mcg->existsEdge(currentNode, childNode)) {
+        mcg->addEdge(currentNode, childNode);
+      }
     }
   }
 
@@ -141,7 +145,9 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
     outs() << metavirt::fn_names_and_origins(vcallData.value()).size() << "\n";
     for (const auto& dataPoints : metavirt::fn_names_and_origins(vcallData.value())) {
       auto& childNode = mcg->getOrInsertNode(dataPoints.name.str(), dataPoints.origin.str());
-      mcg->addEdge(currentNode, childNode);
+      if (!mcg->existsEdge(currentNode, childNode)) {
+        mcg->addEdge(currentNode, childNode);
+      }
       assert(childNode.getOrigin() == dataPoints.origin);
     }
     return metavirt::fn_names_and_origins(vcallData.value()).size();

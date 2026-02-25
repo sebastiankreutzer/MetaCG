@@ -53,7 +53,7 @@ PreservedAnalyses CaGe::run(Module& M, ModuleAnalysisManager& MA) {
   }
 
   Generator gen(pta);
-  gen.addConsumer(std::make_unique<FileExporter>(cgout));
+  gen.addConsumer(std::make_unique<FileExporter>(outfile));
   if (embed) {
     gen.addConsumer(std::make_unique<GraphEmbedder>(M));
   }

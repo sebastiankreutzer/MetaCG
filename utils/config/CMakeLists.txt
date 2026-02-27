@@ -10,7 +10,7 @@ function(add_mcgconfig target)
   add_executable(${target} MCGConfig.cpp)
   add_config_include(${target})
   add_cxxopts(${target})
-  target_compile_definitions(${target} PRIVATE INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}" ${ARG_DEFINITIONS})
+  target_compile_definitions(${target} PRIVATE INSTALL_LIBDIR="${CMAKE_INSTALL_LIBDIR}" ${ARG_DEFINITIONS})
 endfunction()
 
 # Build two versions of metacg-config: one to use inside the build tree (e.g. for tests) and one for the install tree,
@@ -22,14 +22,15 @@ if(${BUILD_CAGE})
   list(
     APPEND
     MCGCONFIG_BUILD_DEFS
+    BUILD_TREE
     HAVE_CAGE
-    CAGE_PLUGIN="$<TARGET_FILE:cage-plugin>"
+    CAGE_PLUGIN="$<TARGET_FILE_NAME:cage-plugin>"
   )
   list(
     APPEND
     MCGCONFIG_INSTALL_DEFS
     HAVE_CAGE
-    CAGE_PLUGIN="${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/$<TARGET_FILE_NAME:cage-plugin>"
+    CAGE_PLUGIN="$<TARGET_FILE_NAME:cage-plugin>"
   )
 endif()
 

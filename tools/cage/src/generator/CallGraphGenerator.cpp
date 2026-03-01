@@ -5,6 +5,7 @@
  */
 #include "cage/generator/CallgraphGenerator.h"
 #include "cage/generator/NumInstructionsCollector.h"
+#include "cage/generator/LinkageCollector.h"
 
 #include "Callgraph.h"
 
@@ -108,7 +109,7 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
   void visitFunction(llvm::Function& F) {
     if (F.isIntrinsic())
       return;
-    llvm::outs() << "Processing function " << F.getName() << "\n";
+//    llvm::outs() << "Processing function " << F.getName() << "\n";
 
     auto& currentNode = getOrInsertNode(&F);
 
@@ -165,7 +166,7 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       if (!linkageName.empty()) {
         nameToUse = linkageName;
       }
-      origin = functionInfoMap[F]->getFilename().str();
+      origin = std::filesystem::path(functionInfoMap[F]->getDirectory().str()) / functionInfoMap[F]->getFilename().str();
     }
     return mcg->getOrInsertNode(nameToUse.str(), std::move(origin), false, hasBody);
   }
@@ -190,6 +191,9 @@ bool Generator::run(Module& M, ModuleAnalysisManager* MA) {
     // Run metadata collectors
     NumInstructionsCollector nic;
     nic.run(M, *mcg);
+
+    LinkageCollector lc;
+    lc.run(M, *mcg);
 
     // Run registered consumers
     for (auto& consumer : consumers) {

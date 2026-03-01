@@ -44,7 +44,7 @@ class NumInstructionsMD : public metacg::MetaData::Registrar<NumInstructionsMD> 
     if (numInstructions != 0 && toMergeDerived->getNumberOfInstructions() != 0 &&
         numInstructions != toMergeDerived->getNumberOfInstructions()) {
       metacg::MCGLogger::instance().getErrConsole()->warn(
-          "Same function defined with different number of instructions found on merge.");
+          "Same function defined with different number of instructions found on merge: {} and {}", numInstructions, toMergeDerived->getNumberOfInstructions());
     }
     numInstructions = std::max(numInstructions, toMergeDerived->getNumberOfInstructions());
   }

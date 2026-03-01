@@ -1,5 +1,7 @@
-//
-// Created by ui72hona on 1/8/26.
-//
+/**
+* File: CageMD.cpp
+* License: Part of the MetaCG project. Licensed under BSD 3 clause license. See LICENSE.txt file at
+* https://github.com/tudasc/metacg/LICENSE.txt
+ */
 
 #include "cage/generator/NumInstructionsMD.h"

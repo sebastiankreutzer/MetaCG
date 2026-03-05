@@ -5,3 +5,4 @@
  */
 
 #include "cage/generator/NumInstructionsMD.h"
+#include "cage/generator/LinkageMD.h"

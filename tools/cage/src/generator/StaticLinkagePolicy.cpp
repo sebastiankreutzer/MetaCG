@@ -11,23 +11,21 @@
 #include "cage/generator/LinkageMD.h"
 #include "cage/generator/StaticLinkagePolicy.h"
 
-#include "llvm/IR/GlobalValue.h"
-
 using namespace metacg;
 
 namespace cage {
 
 namespace {
 
-using LT = llvm::GlobalValue::LinkageTypes;
+using LT = cage::Linkage;
 
-bool isLocal(LT L) { return L == LT::InternalLinkage || L == LT::PrivateLinkage; }
+bool isLocal(LT L) { return L == LT::Internal || L == LT::Private; }
 
 bool isStrong(LT L) {
   switch (L) {
-    case LT::ExternalLinkage:
-    case LT::InternalLinkage:
-    case LT::PrivateLinkage:
+    case LT::External:
+    case LT::Internal:
+    case LT::Private:
       return true;
     default:
       return false;  // weak/linkonce/common/etc.
@@ -36,11 +34,11 @@ bool isStrong(LT L) {
 
 bool isWeak(LT L) {
   switch (L) {
-    case LT::WeakAnyLinkage:
-    case LT::WeakODRLinkage:
-    case LT::LinkOnceAnyLinkage:
-    case LT::LinkOnceODRLinkage:
-    case LT::ExternalWeakLinkage:
+    case LT::WeakAny:
+    case LT::WeakODR:
+    case LT::LinkOnceAny:
+    case LT::LinkOnceODR:
+    case LT::ExternalWeak:
       return true;
     default:
       return false;

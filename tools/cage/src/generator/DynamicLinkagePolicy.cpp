@@ -11,8 +11,6 @@
 #include "cage/generator/LinkageMD.h"
 #include "cage/generator/DynamicLinkagePolicy.h"
 
-#include "llvm/IR/GlobalValue.h"
-
 #include "MergePolicy.h"
 #include "Callgraph.h"
 #include "LoggerUtil.h"
@@ -23,18 +21,18 @@ namespace cage {
 
 namespace {
 
-using LT = llvm::GlobalValue::LinkageTypes;
-using VT = llvm::GlobalValue::VisibilityTypes;
+using LT = cage::Linkage;
+using VT = cage::Visibility;
 
-bool isLocal(LT L) { return L == LT::InternalLinkage || L == LT::PrivateLinkage; }
+bool isLocal(LT L) { return L == LT::Internal || L == LT::Private; }
 
 bool isWeak(LT L) {
   switch (L) {
-    case LT::WeakAnyLinkage:
-    case LT::WeakODRLinkage:
-    case LT::LinkOnceAnyLinkage:
-    case LT::LinkOnceODRLinkage:
-    case LT::ExternalWeakLinkage:
+    case LT::WeakAny:
+    case LT::WeakODR:
+    case LT::LinkOnceAny:
+    case LT::LinkOnceODR:
+    case LT::ExternalWeak:
       return true;
     default:
       return false;
@@ -43,9 +41,9 @@ bool isWeak(LT L) {
 
 bool isStrong(LT L) { return !isWeak(L); }
 
-bool isExported(VT V) { return V == VT::DefaultVisibility || V == VT::ProtectedVisibility; }
+bool isExported(VT V) { return V == VT::Default || V == VT::Protected; }
 
-bool isInterposable(VT V) { return V == VT::DefaultVisibility; }
+bool isInterposable(VT V) { return V == VT::Default; }
 
 }  // namespace
 

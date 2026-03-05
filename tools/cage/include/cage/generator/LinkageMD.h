@@ -8,13 +8,35 @@
 
 #include "metadata/MetaData.h"
 
-#include "llvm/IR/GlobalValue.h"
-
 using namespace metacg;
 
 namespace cage {
 
-using LT = llvm::GlobalValue::LinkageTypes;
+// Mirrors LLVM's linkage types
+enum class Linkage : std::uint8_t {
+  External,
+  AvailableExternally,
+  LinkOnceAny,
+  LinkOnceODR,
+  WeakAny,
+  WeakODR,
+  Appending,
+  Internal,
+  Private,
+  ExternalWeak,
+  Common,
+  Unknown
+};
+
+enum class Visibility : std::uint8_t {
+  Default,
+  Hidden,
+  Protected,
+  Unknown
+};
+
+using LT = Linkage;
+using VT = Visibility;
 
 class LinkageMD : public metacg::MetaData::Registrar<LinkageMD> {
  public:
@@ -37,8 +59,8 @@ class LinkageMD : public metacg::MetaData::Registrar<LinkageMD> {
     visibility   = stringToVisibility(j.value("visibility", "DefaultVisibility"));
   }
 
-  explicit LinkageMD(llvm::GlobalValue::LinkageTypes linkage,
-                     llvm::GlobalValue::VisibilityTypes vis)
+  explicit LinkageMD(LT linkage,
+                     VT vis)
       : linkageType(linkage), visibility(vis) {}
 
  private:
@@ -85,110 +107,105 @@ class LinkageMD : public metacg::MetaData::Registrar<LinkageMD> {
 
   // === Accessors ======================================================
 
-  void setLinkageType(llvm::GlobalValue::LinkageTypes linkage) {
+  void setLinkageType(LT linkage) {
     linkageType = linkage;
   }
 
-  void setVisibility(llvm::GlobalValue::VisibilityTypes vis) {
+  void setVisibility(VT vis) {
     visibility = vis;
   }
 
-  llvm::GlobalValue::LinkageTypes getLinkageType() const {
+  LT getLinkageType() const {
     return linkageType;
   }
 
-  llvm::GlobalValue::VisibilityTypes getVisibility() const {
+  VT getVisibility() const {
     return visibility;
   }
 
  private:
   // === Helper functions ===============================================
 
-  static std::string linkageToString(llvm::GlobalValue::LinkageTypes l) {
+  static std::string linkageToString(LT l) {
     switch (l) {
-      case LT::ExternalLinkage: return "ExternalLinkage";
-      case LT::AvailableExternallyLinkage: return "AvailableExternallyLinkage";
-      case LT::LinkOnceAnyLinkage: return "LinkOnceAnyLinkage";
-      case LT::LinkOnceODRLinkage: return "LinkOnceODRLinkage";
-      case LT::WeakAnyLinkage: return "WeakAnyLinkage";
-      case LT::WeakODRLinkage: return "WeakODRLinkage";
-      case LT::AppendingLinkage: return "AppendingLinkage";
-      case LT::InternalLinkage: return "InternalLinkage";
-      case LT::PrivateLinkage: return "PrivateLinkage";
-      case LT::ExternalWeakLinkage: return "ExternalWeakLinkage";
-      case LT::CommonLinkage: return "CommonLinkage";
-      default: return "Unknown";
+      case LT::External: return "external";
+      case LT::AvailableExternally: return "available_externally";
+      case LT::LinkOnceAny: return "linkonce";
+      case LT::LinkOnceODR: return "linkonce_odr";
+      case LT::WeakAny: return "weak";
+      case LT::WeakODR: return "weak_odr";
+      case LT::Appending: return "appending";
+      case LT::Internal: return "internal";
+      case LT::Private: return "private";
+      case LT::ExternalWeak: return "external_weak";
+      case LT::Common: return "common";
+      default: return "unknown";
     }
   }
 
-  static std::string visibilityToString(llvm::GlobalValue::VisibilityTypes v) {
+  static std::string visibilityToString(VT v) {
     switch (v) {
-      case llvm::GlobalValue::DefaultVisibility:   return "DefaultVisibility";
-      case llvm::GlobalValue::HiddenVisibility:    return "HiddenVisibility";
-      case llvm::GlobalValue::ProtectedVisibility: return "ProtectedVisibility";
+      case VT::Default:   return "default";
+      case VT::Hidden:    return "hidden";
+      case VT::Protected: return "protected";
     }
-    return "DefaultVisibility";
+    return "default";
   }
 
-  static llvm::GlobalValue::LinkageTypes
+  static LT
   stringToLinkage(const std::string& s) {
-    if (s == "external") return LT::ExternalLinkage;
-    if (s == "available_externally") return LT::AvailableExternallyLinkage;
-    if (s == "linkonce") return LT::LinkOnceAnyLinkage;
-    if (s == "linkonce_odr") return LT::LinkOnceODRLinkage;
-    if (s == "weak") return LT::WeakAnyLinkage;
-    if (s == "weak_odr") return LT::WeakODRLinkage;
-    if (s == "appending") return LT::AppendingLinkage;
-    if (s == "internal") return LT::InternalLinkage;
-    if (s == "private") return LT::PrivateLinkage;
-    if (s == "extern_weak") return LT::ExternalWeakLinkage;
-    if (s == "common") return LT::CommonLinkage;
+    if (s == "external") return LT::External;
+    if (s == "available_externally") return LT::AvailableExternally;
+    if (s == "linkonce") return LT::LinkOnceAny;
+    if (s == "linkonce_odr") return LT::LinkOnceODR;
+    if (s == "weak") return LT::WeakAny;
+    if (s == "weak_odr") return LT::WeakODR;
+    if (s == "appending") return LT::Appending;
+    if (s == "internal") return LT::Internal;
+    if (s == "private") return LT::Private;
+    if (s == "external_weak") return LT::ExternalWeak;
+    if (s == "common") return LT::Common;
 
-    return LT::ExternalLinkage;
+    return LT::External;
   }
 
-  static llvm::GlobalValue::VisibilityTypes
+  static VT
   stringToVisibility(const std::string& s) {
-    using VT = llvm::GlobalValue::VisibilityTypes;
+    if (s == "hidden")
+      return VT::Hidden;
+    if (s == "protected")
+      return VT::Protected;
 
-    if (s == "HiddenVisibility" || s == "hidden")
-      return VT::HiddenVisibility;
-    if (s == "ProtectedVisibility" || s == "protected")
-      return VT::ProtectedVisibility;
-
-    return VT::DefaultVisibility;
+    return VT::Default;
   }
 
-  static llvm::GlobalValue::LinkageTypes
-  strongerLinkage(llvm::GlobalValue::LinkageTypes a,
-                  llvm::GlobalValue::LinkageTypes b) {
+  static LT
+  strongerLinkage(LT a,
+                  LT b) {
 
-    if (a == LT::ExternalLinkage || b == LT::ExternalLinkage)
-      return LT::ExternalLinkage;
-    if (a == LT::InternalLinkage || b == LT::InternalLinkage)
-      return LT::InternalLinkage;
+    if (a == LT::External|| b == LT::External)
+      return LT::External;
+    if (a == LT::Internal || b == LT::Internal)
+      return LT::Internal;
 
     return a;
   }
 
-  static llvm::GlobalValue::VisibilityTypes
-  moreRestrictiveVisibility(llvm::GlobalValue::VisibilityTypes a,
-                            llvm::GlobalValue::VisibilityTypes b) {
-    using VT = llvm::GlobalValue::VisibilityTypes;
+  static VT
+  moreRestrictiveVisibility(VT a,
+                            VT b) {
 
-    if (a == VT::HiddenVisibility || b == VT::HiddenVisibility)
-      return VT::HiddenVisibility;
-    if (a == VT::ProtectedVisibility || b == VT::ProtectedVisibility)
-      return VT::ProtectedVisibility;
+    if (a == VT::Hidden || b == VT::Hidden)
+      return VT::Hidden;
+    if (a == VT::Protected || b == VT::Protected)
+      return VT::Protected;
 
-    return VT::DefaultVisibility;
+    return VT::Default;
   }
 
  private:
-  llvm::GlobalValue::LinkageTypes linkageType{
-      llvm::GlobalValue::ExternalLinkage};
-  llvm::GlobalValue::VisibilityTypes visibility{
-      llvm::GlobalValue::DefaultVisibility};
+  Linkage linkageType{LT::External};
+  Visibility visibility{VT::Default};
 };
 
 }  // namespace cage

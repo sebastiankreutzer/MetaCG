@@ -11,7 +11,7 @@ endif()
 add_subdirectory(src)
 add_subdirectory(test)
 
-install(TARGETS cage cage-plugin cage_metadata
+install(TARGETS cage cage-plugin  cage_metadata
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 

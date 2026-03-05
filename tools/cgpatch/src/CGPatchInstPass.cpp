@@ -117,12 +117,13 @@ struct CGPatchInst : PassInfoMixin<CGPatchInst> {
 llvm::PassPluginLibraryInfo getCGPatchInstPluginInfo() {
   return {
     LLVM_PLUGIN_API_VERSION, "cgpatch-inst", LLVM_VERSION_STRING, [](PassBuilder& PB) {
-      //            PB.registerPipelineStartEPCallback(
-      //                [](ModulePassManager& MPM, OptimizationLevel l) { MPM.addPass(CGPatchInst()); });
-      //          }};
-      // Note: Needed to run early before because we were patching source CGs. Now we can run late.
+                  PB.registerPipelineStartEPCallback(
+                      [](ModulePassManager& MPM, OptimizationLevel l) {               outs() << "Registering CGPatch to run during normal opt\n";
+MPM.addPass(CGPatchInst()); });
+                //}};
+       // Note: Needed to run early before because we were patching source CGs. Now we can run late.
 
-      PB.registerFullLinkTimeOptimizationLastEPCallback([](ModulePassManager& PM, OptimizationLevel o) {
+      PB.registerFullLinkTimeOptimizationEarlyEPCallback([](ModulePassManager& PM, OptimizationLevel o) {
         outs() << "Registering CGPatch to run during full LTO\n";
         PM.addPass(CGPatchInst());
       });

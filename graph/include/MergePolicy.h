@@ -11,6 +11,7 @@
 #include "CgTypes.h"
 
 #include <unordered_map>
+#include <string>
 
 namespace metacg {
 
@@ -20,10 +21,11 @@ class Callgraph;
  * Represents the action of replacing or merging with a specific target node.
  */
 struct MergeAction {
-  MergeAction(NodeId targetNode, bool replace) : targetNode(targetNode), replace(replace) {}
+  MergeAction(NodeId targetNode, bool replace, std::string newName = "") : targetNode(targetNode), replace(replace), newName(std::move(newName)) {}
   MergeAction() : MergeAction(-1, false) {}
   NodeId targetNode;
   bool replace;
+  std::string newName;
 };
 
 using GraphMapping = std::unordered_map<NodeId, NodeId>;

@@ -267,6 +267,10 @@ MergeRecorder Callgraph::merge(const metacg::Callgraph& other, const metacg::Mer
       } else {
         // Nothing to be done - we keep the target node.
       }
+      // Rename if necessary
+      if (!match->newName.empty()) {
+        targetNode->setFunctionName(match->newName);
+      }
       // Record the action
       recorder.recordMerge(node->getId(), action);
     } else {

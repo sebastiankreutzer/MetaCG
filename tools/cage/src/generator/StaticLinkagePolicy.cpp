@@ -60,18 +60,18 @@ std::optional<MergeAction> StaticLinkagePolicy::findMatchingNode(const Callgraph
   auto* srcMD = sourceNode.get<cage::LinkageMD>();
   auto* tgtMD = targetNode->get<cage::LinkageMD>();
 
+  bool srcHasBody = sourceNode.getHasBody();
+  bool tgtHasBody = targetNode->getHasBody();
+
   if (!srcMD || !tgtMD) {
     // fallback to body-based behavior
-    if (targetNode->getHasBody() || !sourceNode.getHasBody())
+    if (tgtHasBody || !srcHasBody)
       return MergeAction(targetNode->getId(), false);
     return MergeAction(targetNode->getId(), true);
   }
 
   LT srcL = srcMD->getLinkageType();
   LT tgtL = tgtMD->getLinkageType();
-
-  bool srcHasBody = sourceNode.getHasBody();
-  bool tgtHasBody = targetNode->getHasBody();
 
   // 1. Local symbols never merge across modules
   if (isLocal(srcL) || isLocal(tgtL)) {
@@ -104,6 +104,7 @@ std::optional<MergeAction> StaticLinkagePolicy::findMatchingNode(const Callgraph
     MCGLogger::logWarn("Multiple strong definitions for '{}' during static merge.", sourceNode.getFunctionName());
   }
 
+  // Fallback: keep target definition
   return MergeAction(targetNode->getId(), false);
 }
 

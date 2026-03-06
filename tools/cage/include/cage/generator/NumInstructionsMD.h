@@ -36,17 +36,13 @@ class NumInstructionsMD : public metacg::MetaData::Registrar<NumInstructionsMD> 
 
   const char* getKey() const override { return key; }
 
-  void merge(const MetaData& toMerge, std::optional<MergeAction>, const GraphMapping&) final {
+  void merge(const MetaData& toMerge, std::optional<MergeAction> action, const GraphMapping&) final {
     assert(toMerge.getKey() == getKey() && "Trying to merge NumInstructionsMD with meta data of different types");
 
     const NumInstructionsMD* toMergeDerived = static_cast<const NumInstructionsMD*>(&toMerge);
 
-    if (numInstructions != 0 && toMergeDerived->getNumberOfInstructions() != 0 &&
-        numInstructions != toMergeDerived->getNumberOfInstructions()) {
-      metacg::MCGLogger::instance().getErrConsole()->warn(
-          "Same function defined with different number of instructions found on merge: {} and {}", numInstructions, toMergeDerived->getNumberOfInstructions());
-    }
-    numInstructions = std::max(numInstructions, toMergeDerived->getNumberOfInstructions());
+    numInstructions = action && action->replace ? toMergeDerived->getNumberOfInstructions() : numInstructions;
+
   }
 
   std::unique_ptr<MetaData> clone() const final { return std::unique_ptr<MetaData>(new NumInstructionsMD(*this)); }

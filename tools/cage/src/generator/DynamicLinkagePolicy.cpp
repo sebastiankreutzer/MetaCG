@@ -45,23 +45,94 @@ bool isExported(VT V) { return V == VT::Default || V == VT::Protected; }
 
 bool isInterposable(VT V) { return V == VT::Default; }
 
+enum CtorDtorInfo {
+  Ctor, Dtor, None
+};
+
+// TOOD: This is suuuper hacky!
+static CtorDtorInfo detectCtorDtor(std::string_view name) {
+  if (name.length() < 3 || name.substr(0, 3) != "_ZN")
+    return None;
+
+  for (size_t i = 0; i + 1 < name.size(); ++i) {
+    if (name[i] == 'C' || name[i] == 'D') {
+      char v = name[i + 1];
+      if (v == '1' || v == '2' || v == '3')
+        return name[i] == 'C' ? Ctor : Dtor;
+    }
+  }
+  return None;
+}
+
+std::vector<std::string> generateCtorDtorAliases(std::string_view mangled, bool isDtor) {
+  std::vector<std::string> aliases;
+
+  for (size_t i = 0; i + 1 < mangled.size(); ++i) {
+    if (mangled[i] == (isDtor ? 'D' : 'C')) {
+      char v = mangled[i + 1];
+      if (v == '1' || v == '2' || v == '3') {
+
+        for (char alt : {'1','2','3'}) {
+          if (alt == v)
+            continue;
+
+          std::string candidate(mangled);
+          candidate[i + 1] = alt;
+          aliases.push_back(candidate);
+        }
+        break;
+      }
+    }
+  }
+
+  return aliases;
+}
+
 }  // namespace
+
+
 
 std::optional<MergeAction> DynamicLinkagePolicy::findMatchingNode(const Callgraph& targetCG,
                                                                   const CgNode& sourceNode) const {
+
+  CgNode* targetNode{nullptr};
+
+  std::string newName{""};
+
   auto& matches = targetCG.getNodes(sourceNode.getFunctionName());
   if (matches.empty()) {
-    return {};  // no match → load symbol
+    if (auto type = detectCtorDtor(sourceNode.getFunctionName()); type != None) {
+      for (auto& alias : generateCtorDtorAliases(sourceNode.getFunctionName(), type == Dtor)) {
+        auto& aliasMatches = targetCG.getNodes(alias);
+        if (!aliasMatches.empty()) {
+//          std::cout << "  Matching ctor/dtor alias found: " << alias << "\n";
+          targetNode = targetCG.getNode(aliasMatches.front());
+          // Rename
+          newName = alias;
+          break;
+        }
+      }
+    }
+    if (!targetNode) {
+      return {};
+    }
+  } else {
+    targetNode = targetCG.getNode(matches.front());
   }
 
-  auto* targetNode = targetCG.getNode(matches.front());
   assert(targetNode);
 
   auto* srcMD = sourceNode.get<cage::LinkageMD>();
   auto* tgtMD = targetNode->get<cage::LinkageMD>();
 
+  bool srcHasBody = sourceNode.getHasBody();
+  bool tgtHasBody = targetNode->getHasBody();
+
   if (!srcMD || !tgtMD) {
-    return MergeAction(targetNode->getId(), false);
+    // fallback to body-based behavior
+    if (tgtHasBody || !srcHasBody)
+      return MergeAction(targetNode->getId(), false, newName);
+    return MergeAction(targetNode->getId(), true, newName);
   }
 
   LT srcL = srcMD->getLinkageType();
@@ -70,39 +141,38 @@ std::optional<MergeAction> DynamicLinkagePolicy::findMatchingNode(const Callgrap
   VT srcV = srcMD->getVisibility();
   VT tgtV = tgtMD->getVisibility();
 
-  bool srcHasBody = sourceNode.getHasBody();
-  bool tgtHasBody = targetNode->getHasBody();
 
   // 1. Hidden visibility ->never participate in global resolution
   if (!isExported(srcV) || !isExported(tgtV)) {
     return {};
   }
 
-  // 2. Local linkage -> DSO-local
+  // 2. Definition beats declaration
+  if (srcHasBody && !tgtHasBody)
+    return MergeAction(targetNode->getId(), true, newName);
+
+  if (!srcHasBody && tgtHasBody)
+    return MergeAction(targetNode->getId(), false, newName);
+
+  // 3. Local linkage -> DSO-local
   if (isLocal(srcL) || isLocal(tgtL)) {
     return {};
   }
 
-  // 3. Definition beats declaration
-  if (srcHasBody && !tgtHasBody)
-    return MergeAction(targetNode->getId(), true);
-
-  if (!srcHasBody && tgtHasBody)
-    return MergeAction(targetNode->getId(), false);
-
   // 4. Existing strong default-visible symbol is not preempted
   if (isStrong(tgtL) && isInterposable(tgtV))
-    return MergeAction(targetNode->getId(), false);
+    return MergeAction(targetNode->getId(), false, newName);
 
   // 5. Strong overrides weak
   if (isStrong(srcL) && isWeak(tgtL))
-    return MergeAction(targetNode->getId(), true);
+    return MergeAction(targetNode->getId(), true, newName);
 
   // 6. Weak vs weak -> keep earlier (target)
   if (isWeak(srcL) && isWeak(tgtL))
-    return MergeAction(targetNode->getId(), false);
+    return MergeAction(targetNode->getId(), false, newName);
 
-  return MergeAction(targetNode->getId(), false);
+  // Fallback -> keep target node
+  return MergeAction(targetNode->getId(), false, newName);
 }
 
 }  // namespace cage

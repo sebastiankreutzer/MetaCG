@@ -1,4 +1,4 @@
-add_library(cage STATIC CallGraphGenerator.cpp FileExporter.cpp CallGraphEmbedder.cpp StaticLinkagePolicy.cpp DynamicLinkagePolicy.cpp CallAnalysis.cpp VCallAnalysis.cpp)
+add_library(cage STATIC CallGraphGenerator.cpp FileExporter.cpp CallGraphEmbedder.cpp StaticLinkagePolicy.cpp DynamicLinkagePolicy.cpp VCallAnalysis.cpp)
 set_target_properties(cage PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(cage PRIVATE $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/tools/cage/include>)
 target_include_directories(cage PUBLIC $<BUILD_INTERFACE:${LLVM_INCLUDE_DIRS}>)

@@ -12,7 +12,6 @@
 #ifdef HAVE_METAVIRT
 #include "metavirt/VirtCall.h"
 #endif
-#include "CallAnalysis.h"
 #include "VCallAnalysis.h"
 
 #include "llvm/Analysis/CallGraph.h"

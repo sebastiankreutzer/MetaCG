@@ -12,14 +12,19 @@
 #ifdef HAVE_METAVIRT
 #include "metavirt/VirtCall.h"
 #endif
+#include "CallAnalysis.h"
+#include "VCallAnalysis.h"
 
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO/WholeProgramDevirt.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include "llvm/Analysis/TypeMetadataUtils.h"
+
 
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/InstVisitor.h"
@@ -31,8 +36,9 @@ using namespace llvm;
 namespace cage {
 
 struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
-  CallBaseVisitor(llvm::CallGraph* lcg, PTAType pta) : lcg(lcg), pta(pta), mcg(std::make_unique<metacg::Callgraph>()) {
-    const Module& m = lcg->getModule();
+  CallBaseVisitor(llvm::CallGraph* lcg, PTAType pta, bool useDevirtMD, bool printProgress=false) : lcg(lcg), pta(pta), useDevirtMD(useDevirtMD), printProgress(printProgress), mcg(std::make_unique<metacg::Callgraph>()) {
+    Module& m = lcg->getModule();
+    numFuncs = m.getFunctionList().size();
     llvm::DebugInfoFinder dbg_finder{};
     dbg_finder.processModule(m);
     metaDataAvail = dbg_finder.subprogram_count() != 0;
@@ -54,6 +60,11 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       for (const auto& func : m.getFunctionList()) {
         signatureFunctionMap[func.getFunctionType()].push_back(&func.getFunction());
       }
+    }
+
+    if (useDevirtMD) {
+      // TODO: Do we ever want thunks in the CG? Maybe make this an option.
+      vcallAnalyzer = std::make_unique<VirtualCallAnalyzer>(m, true);
     }
   }
 
@@ -85,30 +96,48 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       }
     }
 
-    if (metaDataAvail) {
+    if (metaDataAvail && !useDevirtMD) {
       size_t numAddedCalls = addVirtualCallTargets(I, *currentNode);
       // This function pointer was a virtual call base, so we do not need to run the overapproximation
       if (numAddedCalls != 0)
         return;
-    }
 
-    // metavirt turned up with nothing
-    // --> was function pointer, where we can not get the called function
-    if (pta == PTAType::BySignature) {
-      const auto& possibleFuncs = signatureFunctionMap[I.getFunctionType()];
-      for (const auto& func : possibleFuncs) {
-        assert(func);
-        auto& childNode = getOrInsertNode(func);
-        insertEdge(*currentNode, childNode);
+      // metavirt turned up with nothing
+      // --> was function pointer, where we can not get the called function
+      if (pta == PTAType::BySignature) {
+        const auto& possibleFuncs = signatureFunctionMap[I.getFunctionType()];
+        for (const auto& func : possibleFuncs) {
+          assert(func);
+          auto& childNode = getOrInsertNode(func);
+          insertEdge(*currentNode, childNode);
+        }
       }
     }
+
+
   }
+
+
 
   void visitFunction(llvm::Function& F) {
     if (F.isIntrinsic())
       return;
 
+    llvm::outs() << "In function " << F.getName() << ":\n";
+    if (F.getName() == "_ZN4Foam8fvMatrixIdE15solveSegregatedERKNS_10dictionaryE") {
+      llvm::outs() << "--------------------------\n" << F << "\n--------------------------\n";
+    }
+
     auto& currentNode = getOrInsertNode(&F);
+
+    if (useDevirtMD) {
+      auto targets = vcallAnalyzer->findVirtualCallTargets(F);
+      for (auto* target : targets) {
+//        outs() << "Inserting vcall to " << target->getName() <<"\n";
+        metacg::CgNode& childNode = getOrInsertNode(target);
+        insertEdge(currentNode, childNode);
+      }
+    }
 
     auto* lcgNode = lcg->operator[](&F);
     for (auto& [key, elem] : *lcgNode) {
@@ -123,6 +152,15 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       metacg::CgNode& childNode = getOrInsertNode(childFunc);
       insertEdge(currentNode, childNode);
     }
+
+    if (printProgress) {
+      numProcessed++;
+      size_t ratioInFives = (20*numProcessed) / numFuncs;
+      if (ratioInFives > lastProgressReport) {
+        outs() << "Processed " << (ratioInFives * 5) << "% of functions...\n";
+        lastProgressReport = ratioInFives;
+      }
+    }
   }
 
   std::unique_ptr<metacg::Callgraph> takeResult() { return std::move(mcg); }
@@ -131,6 +169,7 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
   size_t addVirtualCallTargets(CallBase& I, const metacg::CgNode& currentNode) {
     // TODO: Improve this design if we want to support multiple virtual call resolution mechanisms, e.g. with
     //       template policy parameter.
+
 #ifdef HAVE_METAVIRT
     auto vcallData = metavirt::vcall_data_for(&I);
     if (!vcallData.has_value())
@@ -139,9 +178,15 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       return 0;
 
     for (const auto& dataPoints : metavirt::fn_names_and_origins(vcallData.value())) {
+      if (dataPoints.name.empty()) {
+          llvm::outs() << "metavirt returned empty name! Skipping... \n";
+          continue;
+      }
       auto& childNode = mcg->getOrInsertNode(dataPoints.name.str(), dataPoints.origin.str());
       insertEdge(currentNode, childNode);
-      assert(childNode.getOrigin() == dataPoints.origin);
+//      if (childNode.getOrigin() != dataPoints.origin)
+//          llvm::outs() << "Origin mismatch: " << childNode.getOrigin() << ", " << dataPoints.origin << "\n";
+      //assert(childNode.getOrigin() == dataPoints.origin);
     }
     return metavirt::fn_names_and_origins(vcallData.value()).size();
 #else
@@ -160,6 +205,7 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
       }
       origin = std::filesystem::path(functionInfoMap[F]->getDirectory().str()) / functionInfoMap[F]->getFilename().str();
     }
+
     return mcg->getOrInsertNode(nameToUse.str(), std::move(origin), false, hasBody);
   }
 
@@ -174,17 +220,35 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
   std::unique_ptr<metacg::Callgraph> mcg;
   llvm::CallGraph* lcg;
   PTAType pta;
+  bool useDevirtMD = false;
   bool metaDataAvail = false;
+  bool printProgress = false;
+  size_t numFuncs{0};
+  size_t numProcessed{0};
+  size_t lastProgressReport{0};
+  std::unique_ptr<cage::VirtualCallAnalyzer> vcallAnalyzer;
+
   std::unordered_map<const Function*, const llvm::DISubprogram*> functionInfoMap;
   std::unordered_map<llvm::FunctionType*, std::vector<const Function*>> signatureFunctionMap;
 };
 
 bool Generator::run(Module& M, ModuleAnalysisManager* MA) {
   {
-    auto& cgResult = MA->getResult<CallGraphAnalysis>(M);
-    auto cbv = CallBaseVisitor(&cgResult, ptaType);
-    cbv.visit(M);
 
+    const char* useDevirtMdEnv = std::getenv("CAGE_USE_DEVIRT_MD");
+    bool useDevirtMd{false};
+    if (useDevirtMdEnv) {
+      llvm::outs() << "Using devirt MD for vcall resolution\n";
+      useDevirtMd = true;
+    }
+
+#ifdef HAVE_METAVIRT
+      llvm::outs() << "Using metavirt for vcall resolution\n";
+#endif
+    auto& cgResult = MA->getResult<CallGraphAnalysis>(M);
+    auto cbv = CallBaseVisitor(&cgResult, ptaType, useDevirtMd, printProgress);
+    cbv.visit(M);
+    
     // Take resulting metacg call graph
     auto mcg = cbv.takeResult();
 

@@ -9,9 +9,9 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 
+#include "cage/generator/CallGraphEmbedder.h"
 #include "cage/generator/CallgraphGenerator.h"
 #include "cage/generator/FileExporter.h"
-#include "cage/generator/CallGraphEmbedder.h"
 
 using namespace llvm;
 
@@ -52,7 +52,7 @@ PreservedAnalyses CaGe::run(Module& M, ModuleAnalysisManager& MA) {
     }
   }
 
-  Generator gen(pta);
+  Generator gen(pta, cageVerbose);
   gen.addConsumer(std::make_unique<FileExporter>(outfile));
   if (embed) {
     gen.addConsumer(std::make_unique<GraphEmbedder>(M));
@@ -79,7 +79,7 @@ llvm::PassPluginLibraryInfo getPluginInfo() {
       });
 
       // registering via optlevel during lto appears to still be broken
-      PB.registerFullLinkTimeOptimizationLastEPCallback([](ModulePassManager& PM, OptimizationLevel o) {
+      PB.registerFullLinkTimeOptimizationEarlyEPCallback([](ModulePassManager& PM, OptimizationLevel o) {
         outs() << "Registering CaGe to run during full LTO\n";
         PM.addPass(cage::CaGe());
       });
@@ -87,6 +87,7 @@ llvm::PassPluginLibraryInfo getPluginInfo() {
       // allow registration via pipeline parser
       PB.registerPipelineParsingCallback(
           [](StringRef Name, ModulePassManager& MPM, ArrayRef<llvm::PassBuilder::PipelineElement>) {
+            outs() << Name << "\n";
             if (Name == "CaGe") {
               outs() << "Registering CaGe to run as pipeline described\n";
               MPM.addPass(cage::CaGe());

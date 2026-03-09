@@ -110,12 +110,12 @@ int main(int argc, char** argv) {
   }
 
   if (result.contains("cage-cxxflags")) {
-    std::cout << " -flto ";
+    std::cout << " -flto -fwhole-program-vtables";
   }
 
   auto cagePlugin = getCaGePlugin(prefix).string();
   if (result.contains("cage-ldflags")) {
-    std::cout << " -flto -fuse-ld=lld -Wl,-mllvm=-load=" << cagePlugin << " -Wl,--load-pass-plugin=" << cagePlugin
+    std::cout << " -flto -fuse-ld=lld -Wl,-mllvm=-whole-program-visibility -Wl,-mllvm=-load=" << cagePlugin << " -Wl,--load-pass-plugin=" << cagePlugin
               << processedPassOpts << " ";
   }
 #endif

@@ -16,7 +16,7 @@ enum PTAType { No, BySignature };
 
 class Generator {
  public:
-  Generator(PTAType ptaType) : ptaType(ptaType) {};
+  Generator(PTAType ptaType, bool printProgress=false) : ptaType(ptaType), printProgress(printProgress) {};
 
   void addConsumer(std::unique_ptr<CallGraphConsumer> consumer) { consumers.push_back(std::move(consumer)); }
 
@@ -24,6 +24,7 @@ class Generator {
 
  private:
   PTAType ptaType;
+  bool printProgress;
   std::vector<std::unique_ptr<CallGraphConsumer>> consumers;
 };
 

@@ -35,6 +35,10 @@ CallType detectCallType(CallBase* Call) {
     return Direct;
   }
 
+  if (Call->isInlineAsm()) {
+    return InlineAsm;
+  }
+
   Value* FuncPtr = Call->getCalledOperand();
 
   // Check for alias

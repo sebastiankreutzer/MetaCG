@@ -14,7 +14,7 @@ class CallBase;
 
 namespace cgpatch {
 
-enum CallType { Direct, DirectAlias, Virtual, Indirect, Unknown };
+enum CallType { Direct, DirectAlias, InlineAsm, Virtual, Indirect, Unknown };
 
 inline bool isDirect(CallType CT) { return CT == Direct || CT == DirectAlias; }
 

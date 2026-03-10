@@ -77,7 +77,7 @@ void instrumentIndirectCalls(Module& M) {
             }
           }
         } else {  // indirect call
-          if (CT == CallType::Virtual)
+          if (CT == CallType::Virtual || CT == CallType::InlineAsm)
             continue;
 
           insertMetaCGCall(Ins, F, CB->getCalledOperand(), runtimeFunction);

@@ -194,6 +194,10 @@ runSingleFileTests "basic" "$test_src_dir/input/singleTU" "" "" "" $regenerate_g
 fails=$?
 total_fails=$((total_fails + fails))
 
+runSingleFileTests "openmp" "$test_src_dir/input/omp" "" "" "-fopenmp" $regenerate_gt
+fails=$?
+total_fails=$((total_fails + fails))
+
 runSingleFileTests "virtual-calls" "$test_src_dir/input/virtualCalls" "" ""  "" $regenerate_gt
 fails=$?
 total_fails=$((total_fails + fails))

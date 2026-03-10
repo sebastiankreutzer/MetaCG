@@ -70,32 +70,87 @@ struct CallBaseVisitor : public llvm::InstVisitor<CallBaseVisitor> {
   ~CallBaseVisitor() = default;
 
   void visitCallBase(llvm::CallBase& I) {
-    // only pass non-resolved calls to metavirt
-    if (I.getCalledFunction() != nullptr)
-      return;
-    auto* currentFunction = I.getParent()->getParent();
-    auto sourceName = currentFunction->getName();
-    if (sourceName.empty()) {
-      llvm::errs() << "Function has no name!\n";
-      return;
-    }
-    auto& matchingNodes = mcg->getNodes(sourceName.str());
-    metacg::CgNode* currentNode;
-    if (matchingNodes.empty()) {
-      llvm::errs() << "Could not find node for function " << currentFunction->getName() << " - inserting now\n";
-      currentNode = &getOrInsertNode(currentFunction);
-    } else {
-      if (matchingNodes.size() > 1) {
-        llvm::errs() << "Encountered duplicate nodes for function " << sourceName << "\n";
+    // Helper function to retrieve the current parent function
+    auto getCurrentNode = [&]() -> metacg::CgNode*{
+      auto* currentFunction = I.getParent()->getParent();
+      auto sourceName = currentFunction->getName();
+      if (sourceName.empty()) {
+        llvm::errs() << "Function has no name!\n";
+        return {};
       }
-      currentNode = mcg->getNode(matchingNodes[0]);
-      if (!currentNode) {
-        llvm::errs() << "Could not retrieve node with ID=" << matchingNodes[0] << "\n";
-        return;
+      auto& matchingNodes = mcg->getNodes(sourceName.str());
+      metacg::CgNode* currentNode;
+      if (matchingNodes.empty()) {
+        llvm::errs() << "Could not find node for function " << currentFunction->getName() << " - inserting now\n";
+        currentNode = &getOrInsertNode(currentFunction);
+      } else {
+        if (matchingNodes.size() > 1) {
+          llvm::errs() << "Encountered duplicate nodes for function " << sourceName << "\n";
+        }
+        currentNode = mcg->getNode(matchingNodes[0]);
+        if (!currentNode) {
+          llvm::errs() << "Could not retrieve node with ID=" << matchingNodes[0] << "\n";
+          return {};
+        }
+        return currentNode;
       }
+    };
+
+    if (auto callee = I.getCalledFunction()) {
+      // resolving OMP calls
+      if (callee->getName().starts_with("__kmpc")) {
+        llvm::outs() << "Encountered OMP call: " << callee->getName() << "\n";
+      }
+      Function* outlinedKernel = nullptr;
+      if (callee->getName() == "__kmpc_fork_call") {
+        // Argument index 0: loc (ident_t*)
+        // Argument index 1: argc (int32)
+        // Argument index 2: microtask (void*)
+        Value *kernelVal = I.getArgOperand(2);
+        // Strip bitcasts to find the actual Function object
+        outlinedKernel = dyn_cast<Function>(kernelVal->stripPointerCasts());
+      }  else if (callee->getName() == "__kmpc_omp_task_alloc") {
+        Value *taskKernelVal = I.getArgOperand(5);
+        outlinedKernel = dyn_cast<Function>(taskKernelVal->stripPointerCasts());
+      } else if (callee->getName().starts_with("GOMP_parallel") || callee->getName().starts_with("GOMP_task")) {
+        // For GOMP_parallel, the function pointer is Arg 0
+        Value *KernelVal = I.getArgOperand(0);
+        // Strip bitcasts to find the actual Function object
+        outlinedKernel = dyn_cast<Function>(KernelVal->stripPointerCasts());
+      }
+      if (outlinedKernel) {
+        if (outlinedKernel->getName().contains(".omp_task_entry")) {
+          // Look through the instructions in the entry wrapper
+          for (auto &BB : *outlinedKernel) {
+            for (auto &I : BB) {
+              if (auto *CB = dyn_cast<CallBase>(&I)) {
+                Function *realBody = CB->getCalledFunction();
+                if (realBody && realBody->getName().contains(".omp_outlined")) {
+                  llvm::outs() << "Found actual task body: " << realBody->getName() << "\n";
+                  outlinedKernel = realBody;
+                }
+              }
+            }
+          }
+        }
+        llvm::outs() << "Found OpenMP Kernel: " << outlinedKernel->getName() << "\n";
+        auto* currentNode = getCurrentNode();
+        if (!currentNode) {
+          return;
+        }
+        metacg::CgNode& childNode = getOrInsertNode(outlinedKernel);
+        insertEdge(*currentNode, childNode);
+      }
+
+      return;
     }
 
+    // only pass non-resolved calls to metavirt
     if (metaDataAvail && !useDevirtMD) {
+      auto* currentNode = getCurrentNode();
+      if (!currentNode) {
+        return;
+      }
       size_t numAddedCalls = addVirtualCallTargets(I, *currentNode);
       // This function pointer was a virtual call base, so we do not need to run the overapproximation
       if (numAddedCalls != 0)
